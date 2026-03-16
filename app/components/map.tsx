@@ -2,6 +2,7 @@
 
 import { useEffect, useRef } from 'react';
 import maplibregl from 'maplibre-gl';
+const DEFAULT_CENTER: [number, number] = [-91.17780950467707, 30.41340666855488];
 
 export default function Map() {
   const mapContainer = useRef<HTMLDivElement>(null);
@@ -9,23 +10,24 @@ export default function Map() {
 
   useEffect(() => {
     if (!mapContainer.current) return;
+    
+    map.current = new maplibregl.Map({
+      style: 'https://tiles.openfreemap.org/styles/bright',
+      center: DEFAULT_CENTER,
+      zoom: 15.5,
+      container: mapContainer.current!,
+      canvasContextAttributes: { antialias: true }
+    });
 
-    // Get user's location first
-    navigator.geolocation.getCurrentPosition((position) => {
-      const { latitude, longitude } = position.coords;
+    const geolocate = new maplibregl.GeolocateControl({
+      positionOptions: { enableHighAccuracy: true },
+      trackUserLocation: true,
+      showUserHeading: true,
+    });
 
-      // Initialize the map centered on user
-      map.current = new maplibregl.Map({
-        container: mapContainer.current!,
-        style: 'https://basemaps.cartocdn.com/gl/positron-gl-style/style.json', // free, no API key
-        center: [longitude, latitude],
-        zoom: 15,
-      });
-
-      // Add a marker at user's location
-      new maplibregl.Marker({ color: '#FF0000' })
-        .setLngLat([longitude, latitude])
-        .addTo(map.current);
+    map.current.addControl(geolocate);
+    map.current.on('load', () => {
+      geolocate.trigger();
     });
 
     return () => map.current?.remove();
