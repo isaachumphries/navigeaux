@@ -22,7 +22,6 @@ export default function Map() {
     const geolocate = new maplibregl.GeolocateControl({
       positionOptions: { enableHighAccuracy: true },
       trackUserLocation: true,
-      showUserHeading: true,
     });
 
     map.current.addControl(geolocate);
