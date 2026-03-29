@@ -19,8 +19,15 @@
   }
 }
 
-body {
+html, body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
   background: var(--background);
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
+}
+
+.maplibregl-ctrl-group {
+  display: block !important;
 }
