@@ -1,4 +1,6 @@
 FROM node:20-alpine AS base
+RUN apk update && apk add git
+RUN apk add --no-cache libc6-compat
 RUN corepack enable
 
 FROM base AS deps

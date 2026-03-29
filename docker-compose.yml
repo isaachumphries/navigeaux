@@ -1,0 +1,30 @@
+services:
+  app:
+    build: .
+    user: root
+    volumes:
+     - .:/app  # This maps your laptop's folder to a folder named /navigeaux inside the container
+    working_dir: /app
+    ports:
+      - "3000:3000"
+      - "3001:3001"
+    depends_on:
+      - db 
+   
+
+ #postgis db
+  db:
+    image: postgis/postgis:latest
+    environment:
+      - POSTGRES_USER=duncandonuts
+      - POSTGRES_PASSWORD=test123
+      - POSTGRES_DB=pftmap
+    ports:
+      - "5432:5432" # Map to local port so you can use pgAdmin/QGIS
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      # Mounts your init script to the auto-run folder
+      - ./initialize.sql:/docker-entrypoint-initdb.d/init.sql
+
+volumes:
+  postgres_data: 
