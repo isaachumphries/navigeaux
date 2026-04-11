@@ -27,6 +27,29 @@ export default function Map() {
     map.current.addControl(geolocate);
     map.current.on('load', () => {
       geolocate.trigger();
+
+      //floor 1
+      map.current?.addSource('floor-1-source', {
+        type: 'image',
+        url: '/pft1floor_copy.png',
+        coordinates: [
+            [-91.1801422, 30.4090024], //top left
+            [-91.1788229, 30.4086384], //top right
+            [-91.1795364, 30.4066045], //bottom right
+            [-91.1809503, 30.4069773], //bottom left
+        ]
+    });
+ 
+ 
+    map.current?.addLayer({
+        id: 'floor-1-layer',
+        type: 'raster',
+        source: 'floor-1-source',
+        paint: {
+            'raster-opacity': 1.0
+        }
+    });
+ 
     });
 
     return () => map.current?.remove();
