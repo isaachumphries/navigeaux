@@ -1,7 +1,6 @@
 "use client";
 
-import { auth, googleProvider} from "../firebase";
-import { signInWithPopup } from "firebase/auth";
+import { loginWithGoogle } from "../authAdapter";
 import { useRouter } from "next/navigation";
 {/*signInWithPopUp opens a popup window when the user clicks the button
     userRouter direct users to the main page after login in*/}
@@ -10,19 +9,13 @@ export default function Login(){
     const router= useRouter();
     const handleGoogleLogin = async() => {
         try {
-            const result = await signInWithPopup(auth, googleProvider);
-            const email = result.user.email;
-            if (!email || !email.endsWith("@lsu.edu")){
-                alert("Please sign in with LSU email");
-                await auth.signOut();
-                return;}
-
+                await loginWithGoogle();
                 router.push("/");
         }
             catch(error){
-                alert("Log in failed! Try Again")
+                alert("Log in failed! LSU emails only")
             }  
-        }
+        };
     return (
         <main className="relative w-screen h-screen overflow-hidden font-sans">
            
