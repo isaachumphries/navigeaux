@@ -67,7 +67,7 @@ export default function Map() {
             3, '#ffcc00',
             '#ccc'
           ],
-          'fill-opacity': 0.4
+          'fill-opacity': 0.2
         }
       });
       //clicking on classrooms
