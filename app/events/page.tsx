@@ -82,7 +82,7 @@ export default function Events(){
                             <p className="text-white/80 text-base leading-relaxed mb-4">{selectedEvent.description}</p>
                             <Link href="/">
                                 <p className="text-[#FDD023] font-bold hover:underline cursor-pointer">
-                                    Room: {selectedEvent.room} — click to navigate
+                                    Room: {selectedEvent.room} - click to navigate
                                 </p>
                             </Link>
                             <button
