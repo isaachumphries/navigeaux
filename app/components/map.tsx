@@ -1,64 +1,67 @@
 'use client';
-
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useCallback } from 'react';
 import maplibregl from 'maplibre-gl';
+import { NavGraph, type NavigationResult } from './navigation';
+import { addFloorLayer, addRouteLayer, drawRoute, clearRoute } from './mapLayers';
+import SearchBar from './searchBar';
+import graphData from '../pftF1Graph.json';
+
 const DEFAULT_CENTER: [number, number] = [-91.17780950467707, 30.41340666855488];
+
+const graph = new NavGraph(graphData as any);
 
 export default function Map() {
   const mapContainer = useRef<HTMLDivElement>(null);
   const map = useRef<maplibregl.Map | null>(null);
+  const userGPS = useRef<[number, number] | null>(null);
+
+  const handleRouteFound = useCallback((result: NavigationResult) => {
+    if (map.current) drawRoute(map.current, result.route);
+  }, []);
+
+  const handleRouteClear = useCallback(() => {
+    if (map.current) clearRoute(map.current);
+  }, []);
 
   useEffect(() => {
     if (!mapContainer.current) return;
-    
+
     map.current = new maplibregl.Map({
       style: 'https://tiles.openfreemap.org/styles/bright',
       center: DEFAULT_CENTER,
       zoom: 15.5,
       container: mapContainer.current!,
-      canvasContextAttributes: { antialias: true }
+      canvasContextAttributes: { antialias: true },
     });
 
     const geolocate = new maplibregl.GeolocateControl({
       positionOptions: { enableHighAccuracy: true },
       trackUserLocation: true,
     });
-
     map.current.addControl(geolocate);
+
     map.current.on('load', () => {
       geolocate.trigger();
+      addFloorLayer(map.current!);
+      addRouteLayer(map.current!);
+    });
 
-      //floor 1
-      map.current?.addSource('floor-1-source', {
-        type: 'image',
-        url: '/pft1floor_copy.png',
-        coordinates: [
-            [-91.1801422, 30.4090024], //top left
-            [-91.1788229, 30.4086384], //top right
-            [-91.1795364, 30.4066045], //bottom right
-            [-91.1809503, 30.4069773], //bottom left
-        ]
-    });
- 
- 
-    map.current?.addLayer({
-        id: 'floor-1-layer',
-        type: 'raster',
-        source: 'floor-1-source',
-        paint: {
-            'raster-opacity': 1.0
-        }
-    });
- 
+    geolocate.on('geolocate', (e: GeolocationPosition) => {
+      userGPS.current = [e.coords.longitude, e.coords.latitude];
     });
 
     return () => map.current?.remove();
   }, []);
 
   return (
-    <div
-      ref={mapContainer}
-      style={{ width: '100%', height: '100vh' }}
-    />
+    <div style={{ position: 'relative', width: '100%', height: '100vh' }}>
+      <div ref={mapContainer} style={{ width: '100%', height: '100%' }} />
+      <SearchBar
+        graph={graph}
+        userGPS={userGPS}
+        onRouteFound={handleRouteFound}
+        onRouteClear={handleRouteClear}
+      />
+    </div>
   );
 }
