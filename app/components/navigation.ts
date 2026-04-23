@@ -101,8 +101,10 @@ export class NavGraph {
     return best;
   }
 
-  /** Dijkstra shortest path. Returns node IDs or null if unreachable. */
-  findPath(startId: string, endId: string): string[] | null {
+  /** Dijkstra shortest path. Returns node IDs or null if unreachable.
+   *  Nodes whose type is in excludeIntermediate are never used as waypoints
+   *  (only start/end are exempt from this restriction). */
+  findPath(startId: string, endId: string, excludeIntermediate: Set<number> = new Set()): string[] | null {
     if (!this.nodes.has(startId) || !this.nodes.has(endId)) return null;
 
     const dist: Map<string, number> = new Map();
@@ -131,6 +133,7 @@ export class NavGraph {
 
       for (const { to, weight } of this.adjacency.get(current)!) {
         if (visited.has(to)) continue;
+        if (to !== endId && excludeIntermediate.has(this.nodes.get(to)!.type)) continue;
         const alt = currentDist + weight;
         if (alt < dist.get(to)!) {
           dist.set(to, alt);
@@ -195,13 +198,16 @@ export class NavGraph {
       return null;
     }
 
-    const destEntry = this.nearestRoutableNode(destNode.coord);
+    // End navigation at the room's door, not the room node itself.
+    const door = destNode.type === 4 ? destNode : this.findRoomDoor(destNode);
+    const destEntry = door ?? this.nearestRoutableNode(destNode.coord);
     if (!destEntry) return null;
 
     const start = this.nearestNode(userGPS);
     if (!start) return null;
 
-    const path = this.findPath(start.id, destEntry.id);
+    // Room nodes (type 1) must not be used as intermediate waypoints.
+    const path = this.findPath(start.id, destEntry.id, new Set([1]));
     if (!path) return null;
 
     const turnCount = path.filter(id => this.nodes.get(id)!.type === 3).length;
@@ -212,6 +218,38 @@ export class NavGraph {
       distanceMeters: this.pathDistance(path),
       turnCount,
     };
+  }
+
+  /** Returns the nearest door node (type 4) for a given room node.
+   *  Prefers doors whose ID shares the room's name prefix (e.g. "1100DOOR01"
+   *  for room "1100"), then falls back to the closest routable non-room node. */
+  private findRoomDoor(roomNode: GraphNode): GraphNode | null {
+    const prefix = roomNode.id.replace(/ROOM$/i, '').toLowerCase();
+
+    let best: GraphNode | null = null;
+    let bestDist = Infinity;
+
+    for (const node of this.nodes.values()) {
+      if (node.type !== 4) continue;
+      const edges = this.adjacency.get(node.id);
+      if (!edges || edges.length === 0) continue;
+      if (!node.id.toLowerCase().startsWith(prefix)) continue;
+      const d = haversine(roomNode.coord, node.coord);
+      if (d < bestDist) { bestDist = d; best = node; }
+    }
+
+    if (best) return best;
+
+    // Fallback: nearest routable non-room node
+    bestDist = Infinity;
+    for (const node of this.nodes.values()) {
+      if (node.type === 1) continue;
+      const edges = this.adjacency.get(node.id);
+      if (!edges || edges.length === 0) continue;
+      const d = haversine(roomNode.coord, node.coord);
+      if (d < bestDist) { bestDist = d; best = node; }
+    }
+    return best;
   }
 
   /**
@@ -258,7 +296,7 @@ export class NavGraph {
   getDestinations(): { id: string; type: number; coord: Coord }[] {
     const results: { id: string; type: number; coord: Coord }[] = [];
     for (const node of this.nodes.values()) {
-      if (node.type === 1 || node.type === 4) {
+      if (node.type === 1) {
         results.push({ id: node.id, type: node.type, coord: node.coord });
       }
     }

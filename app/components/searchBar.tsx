@@ -20,7 +20,7 @@ export default function SearchBar({ graph, userGPS, onRouteFound, onRouteClear }
     graph.getDestinations().map(d => ({
       id: d.id,
       type: d.type,
-      label: d.id.replace('room_', 'Room ').replace('door_', 'Door '),
+      label: `PFT ${d.id.replace(/ROOM$/i, '').trim()}`,
     }))
   );
 
