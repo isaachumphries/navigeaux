@@ -1,143 +1,180 @@
 'use client';
-
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useCallback, useState } from 'react';
 import maplibregl from 'maplibre-gl';
+import { NavGraph, RouteNavigator, type NavigationResult } from './navigation';
+import {
+  addFloorLayer, addRouteLayer, addBlueDotLayer,
+  drawRoute, clearRoute, updateBlueDot, clearBlueDot,
+  setGeolocateDotVisibility,
+} from './mapLayers';
+import GUI from './gui';
+import graphData from '../pftF1Graph.json';
+
 const DEFAULT_CENTER: [number, number] = [-91.17780950467707, 30.41340666855488];
+const SPEED_MPS        = (2 * 1609.344) / 3600; // 2 mph ≈ 0.894 m/s
+const SNAP_THROTTLE_MS = 5000;                  // cooldown between processed GPS snaps
+
+const graph = new NavGraph(graphData as any);
+
+type Simulator = ReturnType<RouteNavigator['simulate']>;
 
 export default function Map() {
-  const mapContainer = useRef<HTMLDivElement>(null);
-  const map = useRef<maplibregl.Map | null>(null);
-  const [selectedRoom, setSelectedRoom] = useState<{ name: string, id: number } | null>(null);
+  const [gpsReady, setGpsReady] = useState(false);
+  const gpsReadyRef   = useRef(false);
+
+  const mapContainer  = useRef<HTMLDivElement>(null);
+  const map           = useRef<maplibregl.Map | null>(null);
+  const userGPS       = useRef<[number, number] | null>(null);
+  const activeRoute   = useRef<GeoJSON.Feature<GeoJSON.LineString> | null>(null);
+  const simulatorRef  = useRef<Simulator | null>(null);
+  const rafHandle     = useRef<number | null>(null);
+  const lastTs        = useRef<number | null>(null);
+  const geolocateRef  = useRef<maplibregl.GeolocateControl | null>(null);
+  const pendingGPS    = useRef<[number, number] | null>(null);
+  const snapTimer     = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const stopSimulation = useCallback(() => {
+    if (rafHandle.current !== null) {
+      cancelAnimationFrame(rafHandle.current);
+      rafHandle.current = null;
+    }
+    simulatorRef.current = null;
+    lastTs.current       = null;
+    pendingGPS.current   = null;
+    if (snapTimer.current !== null) { clearTimeout(snapTimer.current); snapTimer.current = null; }
+    if (map.current) clearBlueDot(map.current);
+  }, []);
+
+  const startSimulation = useCallback((route: GeoJSON.Feature<GeoJSON.LineString>) => {
+    stopSimulation();
+
+    const sim = new RouteNavigator(route).simulate(SPEED_MPS);
+    simulatorRef.current = sim;
+
+    const tick = (ts: number) => {
+      if (!map.current || simulatorRef.current !== sim) return;
+
+      const dt = lastTs.current === null ? 0 : (ts - lastTs.current) / 1000;
+      lastTs.current = ts;
+
+      const status = sim.step(dt);
+      updateBlueDot(map.current, status.snappedPosition as [number, number]);
+
+      if (status.hasArrived) {
+        clearBlueDot(map.current);
+        return;
+      }
+
+      rafHandle.current = requestAnimationFrame(tick);
+    };
+
+    rafHandle.current = requestAnimationFrame(tick);
+  }, [stopSimulation]);
+
+  const handleRouteFound = useCallback((result: NavigationResult) => {
+    if (!map.current) return;
+    stopSimulation();
+    if (geolocateRef.current) setGeolocateDotVisibility(geolocateRef.current, true);
+    activeRoute.current = result.route;
+    drawRoute(map.current, result.route);
+  }, [stopSimulation]);
+
+  const handleNavigationStart = useCallback(() => {
+    if (!activeRoute.current || !map.current) return;
+    if (geolocateRef.current) setGeolocateDotVisibility(geolocateRef.current, false);
+    startSimulation(activeRoute.current);
+  }, [startSimulation]);
+
+  const handleRouteClear = useCallback(() => {
+    if (!map.current) return;
+    clearRoute(map.current);
+    stopSimulation();
+    activeRoute.current = null;
+    if (geolocateRef.current) setGeolocateDotVisibility(geolocateRef.current, true);
+  }, [stopSimulation]);
 
   useEffect(() => {
     if (!mapContainer.current) return;
-    
+
     map.current = new maplibregl.Map({
       style: 'https://tiles.openfreemap.org/styles/bright',
       center: DEFAULT_CENTER,
       zoom: 15.5,
       container: mapContainer.current!,
-      canvasContextAttributes: { antialias: true }
+      canvasContextAttributes: { antialias: true },
     });
 
     const geolocate = new maplibregl.GeolocateControl({
       positionOptions: { enableHighAccuracy: true },
       trackUserLocation: true,
     });
-
+    geolocateRef.current = geolocate;
     map.current.addControl(geolocate);
+
     map.current.on('load', () => {
       geolocate.trigger();
-
-      //floor 1
-      map.current?.addSource('floor-1-source', {
-        type: 'image',
-        url: '/pft1floor_copy.png',
-        coordinates: [
-            [-91.1801422, 30.4090024], //top left
-            [-91.1788229, 30.4086384], //top right
-            [-91.1795364, 30.4066045], //bottom right
-            [-91.1809159, 30.4069607], //bottom left
-        ]
-      });
- 
- 
-      map.current?.addLayer({
-          id: 'floor-1-layer',
-          type: 'raster',
-          source: 'floor-1-source',
-          paint: {
-              'raster-opacity': 1.0
-          }
-      });
-
-      map.current?.addSource('pft-floor-1', {
-        type: 'geojson',
-        data: '/pftFloor1Ver2.geojson'
-      });
-      map.current?.addLayer({
-        id: 'pft-floor-1-Layer',
-        type: 'fill',
-        source: 'pft-floor-1',
-        paint:{
-          'fill-color': [
-            'match', ['get', 'type'],
-            1, '#e6e6e6',
-            2, '#ffffff',
-            3, '#ffcc00',
-            '#ccc'
-          ],
-          'fill-opacity': 0.2
-        }
-      });
-      //clicking on classrooms
-      map.current?.addLayer({
-        id: 'pft-highlight-marker',
-        type: 'fill',
-        source: 'pft-floor-1',
-        paint: {
-          'fill-color': '#c3b1e1', // violet
-          'fill-opacity': 0.9,
-          'fill-outline-color': '#000000'
-        },
-        filter: ['==', ['get', 'id'], '']
-      });
-      map.current?.on('click', 'pft-floor-1-Layer', (e) => {
-        if (e.features && e.features.length > 0){
-          const feature = e.features[0];
-          const { name, id, type } = feature.properties;
-
-          if (type == 1){
-            setSelectedRoom({ name, id});
-            map.current?.setFilter('pft-highlight-marker', ['==', ['get', 'id'], id]);
-          } else{
-            setSelectedRoom(null);
-          }
-        }
-      });
-      map.current?.on('mouseenter', 'pft-floor-1-Layer', () => {
-        if (map.current) map.current.getCanvas().style.cursor = 'pointer';
-      });
-      map.current?.on('mouseleave', 'pft-floor-1-Layer', () => {
-        if (map.current) map.current.getCanvas().style.cursor = '';
-      });
- 
+      addFloorLayer(map.current!);
+      addRouteLayer(map.current!);
+      addBlueDotLayer(map.current!);
     });
 
-    return () => map.current?.remove();
-  }, []);
+    // Snaps the sim to coord, renders immediately, then starts the cooldown timer.
+    // When the timer fires, any queued trailing update is processed and the
+    // cooldown restarts — implementing throttle-with-trailing-update semantics.
+    const processSnap = (coord: [number, number]) => {
+      const sim = simulatorRef.current;
+      if (!sim || !map.current) return;
+
+      sim.syncToGPS(coord);
+      const snapped = sim.step(0);
+      updateBlueDot(map.current, snapped.snappedPosition as [number, number]);
+
+      snapTimer.current = setTimeout(() => {
+        snapTimer.current = null;
+        const pending = pendingGPS.current;
+        if (pending !== null) {
+          pendingGPS.current = null;
+          processSnap(pending); // trailing update: process and restart cooldown
+        }
+      }, SNAP_THROTTLE_MS);
+    };
+
+    geolocate.on('geolocate', (e: GeolocationPosition) => {
+      userGPS.current = [e.coords.longitude, e.coords.latitude];
+      if (!gpsReadyRef.current) { gpsReadyRef.current = true; setGpsReady(true); }
+
+      const sim = simulatorRef.current;
+      if (!sim) return;
+
+      // MapLibre re-shows the dot on every GPS event; re-hide it each time.
+      setGeolocateDotVisibility(geolocate, false);
+
+      if (snapTimer.current === null) {
+        // No active cooldown — process immediately.
+        processSnap(userGPS.current);
+      } else {
+        // In cooldown — park as trailing update (overwrites any earlier queued value).
+        pendingGPS.current = [userGPS.current[0], userGPS.current[1]];
+      }
+    });
+
+    return () => {
+      stopSimulation();
+      map.current?.remove();
+    };
+  }, [stopSimulation]);
 
   return (
     <div style={{ position: 'relative', width: '100%', height: '100vh' }}>
-      {selectedRoom && (
-        <div style={{
-          position: 'absolute',
-          top: '20px',
-          left: '20px',
-          zIndex: 10,
-          backgroundColor: '#C3B1E1',
-          padding: '15px',
-          borderRadius: '8px',
-          boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
-          minWidth: '250px'
-        }}>
-        <h3 style={{ margin: '0 0 10px 0', color: 'black', fontSize: '1.1rem' }}>{selectedRoom.name}</h3>
-        <button style={{
-          width: '100%', 
-          backgroundColor: '#FDD023', 
-          color: '#341539', 
-          border: 'none', 
-          padding: '8px', 
-          borderRadius: '20px',
-          cursor: 'pointer'
-        }}
-      >Navigate to Room</button>
-    </div>
-    )}
-      <div
-      ref={mapContainer}
-      style={{ width: '100%', height: '100vh' }}
-    />
+      <div ref={mapContainer} style={{ width: '100%', height: '100%' }} />
+      <GUI
+        graph={graph}
+        userGPS={userGPS}
+        gpsReady={gpsReady}
+        onRouteFound={handleRouteFound}
+        onNavigationStart={handleNavigationStart}
+        onRouteClear={handleRouteClear}
+      />
     </div>
   );
 }

@@ -80,7 +80,7 @@ export default function Events(){
                             <h2 className="text-white text-xl font-bold mb-2">{selectedEvent.title}</h2>
                             <p className="text-white/70 text-sm mb-1">{selectedEvent.club}</p>
                             <p className="text-white/80 text-base leading-relaxed mb-4">{selectedEvent.description}</p>
-                            <Link href="/">
+                            <Link href={`/?room=${encodeURIComponent(selectedEvent.room)}`}>
                                 <p className="text-[#FDD023] font-bold hover:underline cursor-pointer">
                                     Room: {selectedEvent.room} - click to navigate
                                 </p>
