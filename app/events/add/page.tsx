@@ -10,14 +10,13 @@ export default function AddEvent(){
     const [day, setDay] = useState("");
     const router= useRouter(); 
     const handleSubmit = async() => {
-            try {
-                    eventRepository.addEvent(title, club, day, description, room );
-                    router.push("/events");
-            }
-                catch(error){
-                    alert("Please try again");
-                }  
-            };
+        try {
+            await eventRepository.addEvent({ title, club, description, room, day });
+            router.push("/events");
+    } catch(error) {
+            alert("Please try again");
+    }  
+};
     return (
          <main className="relative w-screen h-screen overflow-hidden font-sans">
            

@@ -17,14 +17,14 @@ class EventRepository{
         }))
         .filter((event: any) => event.status === "approved");
 };
-    async addEvent(title:string, club:string, description:string, room:string, day:string){
-        await addDoc(collection(db,"Events"),{
+    async addEvent({ title, club, description, room, day }: { title: string, club: string, description: string, room: string, day: string }) {
+        await addDoc(collection(db, "Events"), {
             title,
             club,
-            description, 
-            room, 
-            day, 
-            status:"pending"
+            description,
+            room,
+            day,
+            status: "pending"
         });
     };
     async pinEvent(userID:string, eventID: string){
