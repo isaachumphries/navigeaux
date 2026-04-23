@@ -2,7 +2,7 @@
 // Clean graph-based indoor navigation using explicit nodes and edges.
 // points, lines, and Dijkstra.
 
-type Coord = [number, number]; // [lng, lat]
+export type Coord = [number, number]; // [lng, lat]
 
 interface NodeFeature {
   type: 'Feature';
@@ -388,13 +388,12 @@ export class RouteNavigator {
    *     updateMarker(status.snappedPosition);
    *   }, 500);
    */
-  simulate(speedMps: number = 1.4): (dtSeconds: number) => NavStatus {
+  simulate(speedMps: number = 1.4): { step: (dtSeconds: number) => NavStatus; syncToGPS: (gps: Coord) => void } {
     let currentDistance = 0;
 
-    return (dt: number): NavStatus => {
+    const step = (dt: number): NavStatus => {
       currentDistance = Math.min(currentDistance + speedMps * dt, this.totalLength);
       const point = this.pointAtDistance(currentDistance);
-
       return {
         snappedPosition: point,
         distanceFromRoute: 0,
@@ -405,6 +404,12 @@ export class RouteNavigator {
         hasArrived: (this.totalLength - currentDistance) < this.arrivalThreshold,
       };
     };
+
+    const syncToGPS = (gps: Coord): void => {
+      currentDistance = this.closestPointOnRoute(gps).distanceAlongRoute;
+    };
+
+    return { step, syncToGPS };
   }
 
   private closestPointOnRoute(point: Coord): {
@@ -456,7 +461,7 @@ export class RouteNavigator {
   }
 }
 
-function haversine(a: Coord, b: Coord): number {
+export function haversine(a: Coord, b: Coord): number {
   const R = 6371000;
   const toRad = (deg: number) => (deg * Math.PI) / 180;
   const dLat = toRad(b[1] - a[1]);

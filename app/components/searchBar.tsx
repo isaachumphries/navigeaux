@@ -7,14 +7,16 @@ interface SearchBarProps {
   graph: NavGraph;
   userGPS: React.RefObject<[number, number] | null>;
   onRouteFound: (result: NavigationResult) => void;
+  onNavigationStart: () => void;
   onRouteClear: () => void;
 }
 
-export default function SearchBar({ graph, userGPS, onRouteFound, onRouteClear }: SearchBarProps) {
+export default function SearchBar({ graph, userGPS, onRouteFound, onNavigationStart, onRouteClear }: SearchBarProps) {
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<{ id: string; type: number; label: string }[]>([]);
   const [activeRoute, setActiveRoute] = useState<NavigationResult | null>(null);
   const [isSearchFocused, setIsSearchFocused] = useState(false);
+  const [isNavigating, setIsNavigating] = useState(false);
 
   const allDestinations = useRef(
     graph.getDestinations().map(d => ({
@@ -42,9 +44,13 @@ export default function SearchBar({ graph, userGPS, onRouteFound, onRouteClear }
     setQuery(label);
     setResults([]);
     setIsSearchFocused(false);
+    setIsNavigating(false); // reset if re-selecting while navigating
 
-    const start: [number, number] = userGPS.current ?? [-91.18069, 30.40758];
-    const result = graph.navigateToRoom(start, destId);
+    if (!userGPS.current) {
+      console.warn('GPS unavailable — cannot route without a known position.');
+      return;
+    }
+    const result = graph.navigateToRoom(userGPS.current, destId);
 
     if (!result) {
       console.warn(`No route to ${destId}`);
@@ -56,10 +62,16 @@ export default function SearchBar({ graph, userGPS, onRouteFound, onRouteClear }
     onRouteFound(result);
   }, [graph, userGPS, onRouteFound]);
 
+  const handleStart = useCallback(() => {
+    setIsNavigating(true);
+    onNavigationStart();
+  }, [onNavigationStart]);
+
   const handleClear = useCallback(() => {
     setQuery('');
     setResults([]);
     setActiveRoute(null);
+    setIsNavigating(false);
     onRouteClear();
   }, [onRouteClear]);
 
@@ -70,7 +82,7 @@ export default function SearchBar({ graph, userGPS, onRouteFound, onRouteClear }
         top: 16,
         left: '50%',
         transform: 'translateX(-50%)',
-        width: 'min(360px, calc(100% - 32px))',
+        width: 'min(360px, 70vw)',
         zIndex: 10,
       }}
     >
@@ -164,7 +176,6 @@ export default function SearchBar({ graph, userGPS, onRouteFound, onRouteClear }
               onMouseEnter={e => (e.currentTarget.style.background = '#f9fafb')}
               onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
             >
-              
               <span>{r.label}</span>
             </button>
           ))}
@@ -196,20 +207,38 @@ export default function SearchBar({ graph, userGPS, onRouteFound, onRouteClear }
                 : `${(activeRoute.distanceMeters / 1000).toFixed(1)}km`}
             </div>
           </div>
-          <div
-            style={{
-              background: '#3b82f6',
-              color: '#ffffff',
-              borderRadius: 8,
-              padding: '8px 16px',
-              fontSize: 14,
-              fontWeight: 600,
-              cursor: 'pointer',
-            }}
-            onClick={handleClear}
-          >
-            End
-          </div>
+
+          {isNavigating ? (
+            <div
+              style={{
+                background: '#ef4444',
+                color: '#ffffff',
+                borderRadius: 8,
+                padding: '8px 16px',
+                fontSize: 14,
+                fontWeight: 600,
+                cursor: 'pointer',
+              }}
+              onClick={handleClear}
+            >
+              End
+            </div>
+          ) : (
+            <div
+              style={{
+                background: '#3b82f6',
+                color: '#ffffff',
+                borderRadius: 8,
+                padding: '8px 16px',
+                fontSize: 14,
+                fontWeight: 600,
+                cursor: 'pointer',
+              }}
+              onClick={handleStart}
+            >
+              Start
+            </div>
+          )}
         </div>
       )}
     </div>
