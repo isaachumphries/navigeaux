@@ -29,6 +29,9 @@ export default function Map() {
     map.current.on('load', () => {
       geolocate.trigger();
 
+      
+
+
       //floor 1
       map.current?.addSource('floor-1-source', {
         type: 'image',
@@ -108,6 +111,9 @@ export default function Map() {
   }, []);
 
   return (
+
+    
+
     <div style={{ position: 'relative', width: '100%', height: '100vh' }}>
       {selectedRoom && (
         <div style={{
@@ -130,13 +136,21 @@ export default function Map() {
           padding: '8px', 
           borderRadius: '20px',
           cursor: 'pointer'
+          
         }}
       >Navigate to Room</button>
+
+      
+
     </div>
     )}
+
+    
+
       <div
       ref={mapContainer}
       style={{ width: '100%', height: '100vh' }}
+      
     />
     </div>
   );

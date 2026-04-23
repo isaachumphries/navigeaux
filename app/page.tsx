@@ -9,13 +9,19 @@ export default function Home() {
   return (
     <main className="relative">
       <Map />
-      <div className="absolute top-4 right-12 z-10">
+      <div className="absolute top-2 right-5 z-10">
         <Link href="/events">
-          <button className="px-10 py-3 rounded-full bg-[#[#FDD023] text-[#461D7C] font-bold text-lg shadow-lg bg-yellow-300 transition-all duration-200">
+          <button className="px-10 py-3 rounded-full bg-[#[#FDD023] text-[#461D7C] font-bold text-lg shadow-lg bg-yellow-300 hover:bg-[#FDD023] hover:text-[#461D7C] transition-all duration-200">
            Events
           </button>
         </Link>
       </div>
+
+
+      
+
+
+      
     </main>
   );
 }
