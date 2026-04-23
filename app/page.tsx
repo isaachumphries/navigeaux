@@ -1,11 +1,13 @@
 'use client';
 
-import Start from './start/page';
+import dynamic from 'next/dynamic';
+
+const Map = dynamic(() => import('./components/map'), { ssr: false });
 
 export default function Home() {
   return (
     <main className="relative">
-      <Start />
+      <Map />
     </main>
   );
 }
