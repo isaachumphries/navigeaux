@@ -1,0 +1,22 @@
+{
+	"folders": [
+		{
+			"path": "."
+		},
+		{
+			"path": "../.next"
+		},
+		{
+			"path": "../.vscode"
+		},
+		{
+			"path": "../app"
+		},
+		{
+			"path": "../node_modules"
+		},
+		{
+			"path": "../public"
+		}
+	]
+}
