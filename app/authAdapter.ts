@@ -19,7 +19,7 @@ import { signInWithPopup, signOut } from "firebase/auth";
     export const logoutUser = async() => {
         return signOut(auth);
     }
-    
+
     //current user is instant so no async 
     export const getCurrentUser = () => {
         return auth.currentUser;

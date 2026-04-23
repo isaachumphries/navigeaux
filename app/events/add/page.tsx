@@ -11,7 +11,7 @@ export default function AddEvent(){
     const router= useRouter(); 
     const handleSubmit = async() => {
             try {
-                    eventRepository.addEvent(title, club, day, description, room );
+                    eventRepository.addEvent(title, club, description, room, day );
                     router.push("/events");
             }
                 catch(error){
