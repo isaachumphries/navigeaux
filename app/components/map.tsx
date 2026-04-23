@@ -3,10 +3,11 @@ import { useEffect, useRef, useCallback, useState } from 'react';
 import maplibregl from 'maplibre-gl';
 import { NavGraph, RouteNavigator, type NavigationResult } from './navigation';
 import {
-  addFloorLayer, addRouteLayer, addBlueDotLayer,
+  addFloorLayer, addFloor2Layer, addRouteLayer, addBlueDotLayer,
   drawRoute, clearRoute, updateBlueDot, clearBlueDot,
-  setGeolocateDotVisibility,
+  setGeolocateDotVisibility, setFloorVisibility, FLOOR_COUNT,
 } from './mapLayers';
+// TODO: import pftF2Graph from '../pftF2Graph.json' when floor-2 data is ready
 import GUI from './gui';
 import graphData from '../pftF1Graph.json';
 
@@ -20,7 +21,10 @@ type Simulator = ReturnType<RouteNavigator['simulate']>;
 
 export default function Map() {
   const [gpsReady, setGpsReady] = useState(false);
-  const gpsReadyRef   = useRef(false);
+  const [currentFloor, setCurrentFloor] = useState(1);
+  const [arrivedAt, setArrivedAt] = useState<string | null>(null);
+  const gpsReadyRef        = useRef(false);
+  const destinationLabel   = useRef<string>('');
 
   const mapContainer  = useRef<HTMLDivElement>(null);
   const map           = useRef<maplibregl.Map | null>(null);
@@ -62,6 +66,8 @@ export default function Map() {
 
       if (status.hasArrived) {
         clearBlueDot(map.current);
+        simulatorRef.current = null;
+        setArrivedAt(destinationLabel.current);
         return;
       }
 
@@ -71,9 +77,11 @@ export default function Map() {
     rafHandle.current = requestAnimationFrame(tick);
   }, [stopSimulation]);
 
-  const handleRouteFound = useCallback((result: NavigationResult) => {
+  const handleRouteFound = useCallback((result: NavigationResult, label: string) => {
     if (!map.current) return;
     stopSimulation();
+    setArrivedAt(null);
+    destinationLabel.current = label;
     if (geolocateRef.current) setGeolocateDotVisibility(geolocateRef.current, true);
     activeRoute.current = result.route;
     drawRoute(map.current, result.route);
@@ -89,6 +97,7 @@ export default function Map() {
     if (!map.current) return;
     clearRoute(map.current);
     stopSimulation();
+    setArrivedAt(null);
     activeRoute.current = null;
     if (geolocateRef.current) setGeolocateDotVisibility(geolocateRef.current, true);
   }, [stopSimulation]);
@@ -114,6 +123,7 @@ export default function Map() {
     map.current.on('load', () => {
       geolocate.trigger();
       addFloorLayer(map.current!);
+      addFloor2Layer(map.current!);
       addRouteLayer(map.current!);
       addBlueDotLayer(map.current!);
     });
@@ -164,6 +174,24 @@ export default function Map() {
     };
   }, [stopSimulation]);
 
+  useEffect(() => {
+    if (!map.current) return;
+    setFloorVisibility(map.current, currentFloor);
+  }, [currentFloor]);
+
+  const btnStyle: React.CSSProperties = {
+    width: 40,
+    height: 40,
+    border: 'none',
+    background: '#ffffff',
+    cursor: 'pointer',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    fontSize: 18,
+    color: '#374151',
+  };
+
   return (
     <div style={{ position: 'relative', width: '100%', height: '100vh' }}>
       <div ref={mapContainer} style={{ width: '100%', height: '100%' }} />
@@ -175,6 +203,91 @@ export default function Map() {
         onNavigationStart={handleNavigationStart}
         onRouteClear={handleRouteClear}
       />
+
+      {/* Arrival modal */}
+      {arrivedAt && (
+        <div style={{
+          position: 'absolute',
+          inset: 0,
+          zIndex: 20,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          pointerEvents: 'none',
+        }}>
+          <div style={{
+            background: '#ffffff',
+            borderRadius: 16,
+            boxShadow: '0 4px 24px rgba(0,0,0,0.2)',
+            padding: '28px 32px',
+            textAlign: 'center',
+            fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
+            pointerEvents: 'auto',
+            maxWidth: 300,
+            width: '80vw',
+          }}>
+            <div style={{ fontSize: 36, marginBottom: 8 }}>📍</div>
+            <div style={{ fontSize: 13, color: '#6b7280', marginBottom: 4 }}>You have arrived at</div>
+            <div style={{ fontSize: 20, fontWeight: 700, color: '#1f2937', marginBottom: 20 }}>{arrivedAt}</div>
+            <button
+              onClick={handleRouteClear}
+              style={{
+                background: '#3b82f6',
+                color: '#ffffff',
+                border: 'none',
+                borderRadius: 10,
+                padding: '10px 28px',
+                fontSize: 15,
+                fontWeight: 600,
+                cursor: 'pointer',
+                width: '100%',
+              }}
+            >
+              Close
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Floor switcher */}
+      <div style={{
+        position: 'absolute',
+        right: 16,
+        bottom: 100,
+        zIndex: 10,
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        borderRadius: 12,
+        boxShadow: '0 2px 12px rgba(0,0,0,0.15)',
+        overflow: 'hidden',
+      }}>
+        <button
+          style={{ ...btnStyle, borderBottom: '1px solid #f3f4f6' }}
+          disabled={currentFloor >= FLOOR_COUNT}
+          onClick={() => setCurrentFloor(f => Math.min(f + 1, FLOOR_COUNT))}
+        >▲</button>
+        <div style={{
+          width: 40,
+          height: 36,
+          background: '#ffffff',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          fontSize: 13,
+          fontWeight: 600,
+          color: '#1f2937',
+          fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
+          borderBottom: '1px solid #f3f4f6',
+        }}>
+          F{currentFloor}
+        </div>
+        <button
+          style={btnStyle}
+          disabled={currentFloor <= 1}
+          onClick={() => setCurrentFloor(f => Math.max(f - 1, 1))}
+        >▼</button>
+      </div>
     </div>
   );
 }

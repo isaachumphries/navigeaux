@@ -31,3 +31,20 @@ html, body {
 .maplibregl-ctrl-group {
   display: block !important;
 }
+
+/* Match geolocate button to events button style */
+.maplibregl-ctrl-top-right .maplibregl-ctrl {
+  margin: 16px 16px 0 0;
+}
+
+.maplibregl-ctrl-group:has(.maplibregl-ctrl-geolocate) {
+  border-radius: 12px !important;
+  box-shadow: 0 2px 12px rgba(0,0,0,0.15) !important;
+  border: none !important;
+}
+
+.maplibregl-ctrl-geolocate {
+  width: 48px !important;
+  height: 48px !important;
+  border-radius: 12px !important;
+}
