@@ -1,5 +1,5 @@
 'use client';
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 import Link from 'next/link';
 import type { NavigationResult } from './navigation';
 import type { NavGraph } from './navigation';
@@ -7,12 +7,13 @@ import type { NavGraph } from './navigation';
 interface GUIProps {
   graph: NavGraph;
   userGPS: React.RefObject<[number, number] | null>;
+  gpsReady: boolean;
   onRouteFound: (result: NavigationResult) => void;
   onNavigationStart: () => void;
   onRouteClear: () => void;
 }
 
-export default function GUI({ graph, userGPS, onRouteFound, onNavigationStart, onRouteClear }: GUIProps) {
+export default function GUI({ graph, userGPS, gpsReady, onRouteFound, onNavigationStart, onRouteClear }: GUIProps) {
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<{ id: string; type: number; label: string }[]>([]);
   const [activeRoute, setActiveRoute] = useState<NavigationResult | null>(null);
@@ -26,6 +27,23 @@ export default function GUI({ graph, userGPS, onRouteFound, onNavigationStart, o
       label: `PFT ${d.id.replace(/ROOM$/i, '').trim()}`,
     }))
   );
+
+  const pendingRoom = useRef<{ id: string; label: string } | null>(null);
+
+  // Read room param from URL on mount and pre-populate search.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const roomParam = params.get('room');
+    if (!roomParam) return;
+    const q = roomParam.toLowerCase();
+    const match = allDestinations.current.find(d =>
+      d.label.toLowerCase().includes(q) || d.id.toLowerCase().includes(q)
+    );
+    if (match) {
+      pendingRoom.current = { id: match.id, label: match.label };
+      setQuery(match.label);
+    }
+  }, []);
 
   const handleSearch = useCallback((value: string) => {
     setQuery(value);
@@ -68,6 +86,14 @@ export default function GUI({ graph, userGPS, onRouteFound, onNavigationStart, o
     onNavigationStart();
   }, [onNavigationStart]);
 
+  // Once GPS is acquired, fire the pending route (preview, not started).
+  useEffect(() => {
+    if (!gpsReady || !pendingRoom.current) return;
+    const { id, label } = pendingRoom.current;
+    pendingRoom.current = null;
+    handleSelect(id, label);
+  }, [gpsReady, handleSelect]);
+
   const handleClear = useCallback(() => {
     setQuery('');
     setResults([]);
@@ -85,7 +111,7 @@ export default function GUI({ graph, userGPS, onRouteFound, onNavigationStart, o
           top: 16,
           left: '50%',
           transform: 'translateX(-50%)',
-          width: 'min(360px, 70vw)',
+          width: 'min(360px, calc(100vw - 144px))',
           zIndex: 10,
         }}
       >
@@ -224,7 +250,7 @@ export default function GUI({ graph, userGPS, onRouteFound, onNavigationStart, o
       </div>
 
       {/* Events button */}
-      <Link href="/events" style={{ position: 'absolute', top: 16, right: 16, zIndex: 10 }}>
+      <Link href="/events" style={{ position: 'absolute', top: 16, left: 16, zIndex: 10 }}>
         <div style={{
           width: 48,
           height: 48,

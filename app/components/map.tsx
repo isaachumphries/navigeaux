@@ -1,5 +1,5 @@
 'use client';
-import { useEffect, useRef, useCallback } from 'react';
+import { useEffect, useRef, useCallback, useState } from 'react';
 import maplibregl from 'maplibre-gl';
 import { NavGraph, RouteNavigator, type NavigationResult } from './navigation';
 import {
@@ -11,20 +11,27 @@ import GUI from './gui';
 import graphData from '../pftF1Graph.json';
 
 const DEFAULT_CENTER: [number, number] = [-91.17780950467707, 30.41340666855488];
-const SPEED_MPS = (2 * 1609.344) / 3600; // 2 mph ≈ 0.894 m/s
+const SPEED_MPS        = (2 * 1609.344) / 3600; // 2 mph ≈ 0.894 m/s
+const SNAP_THROTTLE_MS = 5000;                  // cooldown between processed GPS snaps
 
 const graph = new NavGraph(graphData as any);
 
 type Simulator = ReturnType<RouteNavigator['simulate']>;
 
 export default function Map() {
-  const mapContainer = useRef<HTMLDivElement>(null);
-  const map          = useRef<maplibregl.Map | null>(null);
-  const userGPS      = useRef<[number, number] | null>(null);
-  const activeRoute  = useRef<GeoJSON.Feature<GeoJSON.LineString> | null>(null);
-  const simulatorRef = useRef<Simulator | null>(null);
-  const rafHandle    = useRef<number | null>(null);
-  const lastTs       = useRef<number | null>(null);
+  const [gpsReady, setGpsReady] = useState(false);
+  const gpsReadyRef   = useRef(false);
+
+  const mapContainer  = useRef<HTMLDivElement>(null);
+  const map           = useRef<maplibregl.Map | null>(null);
+  const userGPS       = useRef<[number, number] | null>(null);
+  const activeRoute   = useRef<GeoJSON.Feature<GeoJSON.LineString> | null>(null);
+  const simulatorRef  = useRef<Simulator | null>(null);
+  const rafHandle     = useRef<number | null>(null);
+  const lastTs        = useRef<number | null>(null);
+  const geolocateRef  = useRef<maplibregl.GeolocateControl | null>(null);
+  const pendingGPS    = useRef<[number, number] | null>(null);
+  const snapTimer     = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const stopSimulation = useCallback(() => {
     if (rafHandle.current !== null) {
@@ -33,6 +40,8 @@ export default function Map() {
     }
     simulatorRef.current = null;
     lastTs.current       = null;
+    pendingGPS.current   = null;
+    if (snapTimer.current !== null) { clearTimeout(snapTimer.current); snapTimer.current = null; }
     if (map.current) clearBlueDot(map.current);
   }, []);
 
@@ -62,19 +71,17 @@ export default function Map() {
     rafHandle.current = requestAnimationFrame(tick);
   }, [stopSimulation]);
 
-  // Draws the route line immediately; does NOT start animation yet.
   const handleRouteFound = useCallback((result: NavigationResult) => {
     if (!map.current) return;
     stopSimulation();
-    setGeolocateDotVisibility(map.current, true);
+    if (geolocateRef.current) setGeolocateDotVisibility(geolocateRef.current, true);
     activeRoute.current = result.route;
     drawRoute(map.current, result.route);
   }, [stopSimulation]);
 
-  // Called when the user explicitly presses "Start".
   const handleNavigationStart = useCallback(() => {
     if (!activeRoute.current || !map.current) return;
-    setGeolocateDotVisibility(map.current, false);
+    if (geolocateRef.current) setGeolocateDotVisibility(geolocateRef.current, false);
     startSimulation(activeRoute.current);
   }, [startSimulation]);
 
@@ -83,7 +90,7 @@ export default function Map() {
     clearRoute(map.current);
     stopSimulation();
     activeRoute.current = null;
-    setGeolocateDotVisibility(map.current, true);
+    if (geolocateRef.current) setGeolocateDotVisibility(geolocateRef.current, true);
   }, [stopSimulation]);
 
   useEffect(() => {
@@ -101,6 +108,7 @@ export default function Map() {
       positionOptions: { enableHighAccuracy: true },
       trackUserLocation: true,
     });
+    geolocateRef.current = geolocate;
     map.current.addControl(geolocate);
 
     map.current.on('load', () => {
@@ -110,11 +118,44 @@ export default function Map() {
       addBlueDotLayer(map.current!);
     });
 
+    // Snaps the sim to coord, renders immediately, then starts the cooldown timer.
+    // When the timer fires, any queued trailing update is processed and the
+    // cooldown restarts — implementing throttle-with-trailing-update semantics.
+    const processSnap = (coord: [number, number]) => {
+      const sim = simulatorRef.current;
+      if (!sim || !map.current) return;
+
+      sim.syncToGPS(coord);
+      const snapped = sim.step(0);
+      updateBlueDot(map.current, snapped.snappedPosition as [number, number]);
+
+      snapTimer.current = setTimeout(() => {
+        snapTimer.current = null;
+        const pending = pendingGPS.current;
+        if (pending !== null) {
+          pendingGPS.current = null;
+          processSnap(pending); // trailing update: process and restart cooldown
+        }
+      }, SNAP_THROTTLE_MS);
+    };
+
     geolocate.on('geolocate', (e: GeolocationPosition) => {
       userGPS.current = [e.coords.longitude, e.coords.latitude];
-      // On every GPS update during active navigation, snap the dot to the nearest
-      // point on the route to the real position, then resume at 2 mph from there.
-      if (simulatorRef.current) simulatorRef.current.syncToGPS(userGPS.current);
+      if (!gpsReadyRef.current) { gpsReadyRef.current = true; setGpsReady(true); }
+
+      const sim = simulatorRef.current;
+      if (!sim) return;
+
+      // MapLibre re-shows the dot on every GPS event; re-hide it each time.
+      setGeolocateDotVisibility(geolocate, false);
+
+      if (snapTimer.current === null) {
+        // No active cooldown — process immediately.
+        processSnap(userGPS.current);
+      } else {
+        // In cooldown — park as trailing update (overwrites any earlier queued value).
+        pendingGPS.current = [userGPS.current[0], userGPS.current[1]];
+      }
     });
 
     return () => {
@@ -129,6 +170,7 @@ export default function Map() {
       <GUI
         graph={graph}
         userGPS={userGPS}
+        gpsReady={gpsReady}
         onRouteFound={handleRouteFound}
         onNavigationStart={handleNavigationStart}
         onRouteClear={handleRouteClear}

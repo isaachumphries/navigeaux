@@ -67,16 +67,12 @@ export function clearBlueDot(map: maplibregl.Map) {
   src?.setData({ type: 'FeatureCollection', features: [] });
 }
 
-// MapLibre's GeolocateControl internally adds these layers when it first gets a position.
-// Toggling their visibility hides/shows the GPS accuracy dot without stopping tracking.
-const GEOLOCATE_LAYERS = [
-  'maplibre-gl-js-user-location-dot',
-  'maplibre-gl-js-user-location-accuracy-circle',
-];
-
-export function setGeolocateDotVisibility(map: maplibregl.Map, visible: boolean) {
-  const v = visible ? 'visible' : 'none';
-  for (const id of GEOLOCATE_LAYERS) {
-    if (map.getLayer(id)) map.setLayoutProperty(id, 'visibility', v);
-  }
+// MapLibre's GeolocateControl renders the user-location dot as DOM elements
+// (via its internal Marker API), not as GL layers. We target them directly so
+// the hide persists even when MapLibre calls _updateMarker on each GPS event.
+export function setGeolocateDotVisibility(geolocate: maplibregl.GeolocateControl, visible: boolean) {
+  const ctrl = geolocate as any;
+  const display = visible ? '' : 'none';
+  if (ctrl._dotElement)            (ctrl._dotElement as HTMLElement).style.display = display;
+  if (ctrl._accuracyCircleElement) (ctrl._accuracyCircleElement as HTMLElement).style.display = display;
 }
