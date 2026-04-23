@@ -8,7 +8,7 @@ interface GUIProps {
   graph: NavGraph;
   userGPS: React.RefObject<[number, number] | null>;
   gpsReady: boolean;
-  onRouteFound: (result: NavigationResult) => void;
+  onRouteFound: (result: NavigationResult, label: string) => void;
   onNavigationStart: () => void;
   onRouteClear: () => void;
 }
@@ -78,7 +78,7 @@ export default function GUI({ graph, userGPS, gpsReady, onRouteFound, onNavigati
     }
 
     setActiveRoute(result);
-    onRouteFound(result);
+    onRouteFound(result, label);
   }, [graph, userGPS, onRouteFound]);
 
   const handleStart = useCallback(() => {
