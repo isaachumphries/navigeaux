@@ -10,7 +10,7 @@ export default function Login(){
     const handleGoogleLogin = async() => {
         try {
                 await loginWithGoogle();
-                router.push("/");
+                router.push("/map");
         }
             catch(error){
                 alert("Log in failed! LSU emails only")
