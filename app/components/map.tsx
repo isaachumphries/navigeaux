@@ -48,8 +48,10 @@ export default function Map() {
         type: 'image',
         url: '/pft1floor_copy.png',
         coordinates: [
-            [-91.1801422, 30.4090024], //top left
-            [-91.1788229, 30.4086384], //top right
+            [-91.1801422, 30.4090024], //OLD top left
+            //[-91.1801959, 30.4088667], //new top left
+            [-91.1788229, 30.4086384], //OLDtop right
+            //[-91.1788754, 30.4085151], //new top right
             [-91.1795364, 30.4066045], //bottom right
             [-91.1809159, 30.4069607], //bottom left
         ]
