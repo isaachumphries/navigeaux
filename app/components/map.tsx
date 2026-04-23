@@ -8,7 +8,21 @@ export default function Map() {
   const mapContainer = useRef<HTMLDivElement>(null);
   const map = useRef<maplibregl.Map | null>(null);
   const [selectedRoom, setSelectedRoom] = useState<{ name: string, id: number } | null>(null);
+  //const [currentFloor, setCurrentFloor] = useState<number>(1);
 
+  const switchFloor = (floor: number) => {
+    if (!map.current) return;
+
+    //setCurrentFloor(floor);
+
+    if (floor === 1) {
+      map.current.setLayoutProperty('floor-1-layer', 'visibility', 'visible');
+      map.current.setLayoutProperty('floor-2-layer', 'visibility', 'none');
+    } else if (floor === 2){
+      map.current.setLayoutProperty('floor-1-layer', 'visibility', 'none');
+      map.current.setLayoutProperty('floor-2-layer', 'visibility', 'visible');
+    }
+  };
   useEffect(() => {
     if (!mapContainer.current) return;
     
@@ -46,14 +60,34 @@ export default function Map() {
           id: 'floor-1-layer',
           type: 'raster',
           source: 'floor-1-source',
+          layout: { visibility: 'visible' }
+      });
+      //floor 2
+      map.current?.addSource('floor-2-source', {
+        type: 'image',
+        url: '/pft2floor.png',
+        coordinates: [
+          [-91.1788229, 30.4086384], // Was Bottom-Left -> Now Top-Left
+          [-91.1795364, 30.4066045], // Was Bottom-Right -> Now Top-Right
+          [-91.1809159, 30.4069607], // Was Top-Right -> Now Bottom-Right
+          [-91.1801422, 30.4090024], // Was Top-Left -> Now Bottom-Left
+        ]
+      });
+ 
+ 
+      map.current?.addLayer({
+          id: 'floor-2-layer',
+          type: 'raster',
+          source: 'floor-2-source',
           paint: {
               'raster-opacity': 1.0
-          }
+          },
+          layout: { visibility: 'none' }
       });
 
       map.current?.addSource('pft-floor-1', {
         type: 'geojson',
-        data: '/pftFloor1Ver2.geojson'
+        data: '/pftF1Polygons2.0.geojson'
       });
       map.current?.addLayer({
         id: 'pft-floor-1-Layer',
@@ -67,7 +101,7 @@ export default function Map() {
             3, '#ffcc00',
             '#ccc'
           ],
-          'fill-opacity': 0.2
+          'fill-opacity': 0.1
         }
       });
       //clicking on classrooms
@@ -95,6 +129,17 @@ export default function Map() {
           }
         }
       });
+      map.current?.on('click', (e) => {
+        const features = map.current?.queryRenderedFeatures(e.point, {
+          layers: ['pft-floor-1-Layer']
+        });
+      
+        // If no room was clicked → clear highlight
+        if (!features || features.length === 0) {
+          setSelectedRoom(null);
+          map.current?.setFilter('pft-highlight-marker', ['==', ['get', 'id'], '']);
+        }
+      });
       map.current?.on('mouseenter', 'pft-floor-1-Layer', () => {
         if (map.current) map.current.getCanvas().style.cursor = 'pointer';
       });
@@ -108,7 +153,8 @@ export default function Map() {
   }, []);
 
   return (
-    <div style={{ position: 'relative', width: '100%', height: '100vh' }}>
+    <div style={{ position: 'relative', width: '100%', height: '100vh', overflow: 'hidden' }}>
+      <div ref={mapContainer} style={{position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', zIndex: 0}}/>
       {selectedRoom && (
         <div style={{
           position: 'absolute',
@@ -134,10 +180,32 @@ export default function Map() {
       >Navigate to Room</button>
     </div>
     )}
-      <div
-      ref={mapContainer}
-      style={{ width: '100%', height: '100vh' }}
-    />
+    <div
+      style={{
+        position: 'absolute',
+        top: '20px',
+        right: '20px',
+        zIndex: 10,
+        display: 'flex',
+        flexDirection: 'column',
+        gap: '10px',
+      }}
+    >
+      <button style={{width: '100%', 
+          backgroundColor: '#FDD023', 
+          color: '#341539', 
+          border: 'none', 
+          padding: '8px', 
+          borderRadius: '20px',
+          cursor: 'pointer'}}onClick={() => switchFloor(1)}>Floor 1</button>
+      <button style={{width: '100%', 
+          backgroundColor: '#FDD023', 
+          color: '#341539', 
+          border: 'none', 
+          padding: '8px', 
+          borderRadius: '20px',
+          cursor: 'pointer'}} onClick={() => switchFloor(2)}>Floor 2</button>
+    </div>
     </div>
   );
 }
