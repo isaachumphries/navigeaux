@@ -108,6 +108,7 @@ export default function SearchBar({ graph, userGPS, onRouteFound, onNavigationSt
           type="text"
           value={query}
           onChange={e => handleSearch(e.target.value)}
+          onKeyDown={e => { if (e.key === 'Enter' && results.length > 0) handleSelect(results[0].id, results[0].label); }}
           onFocus={() => setIsSearchFocused(true)}
           onBlur={() => setTimeout(() => setIsSearchFocused(false), 200)}
           placeholder="Search rooms..."
